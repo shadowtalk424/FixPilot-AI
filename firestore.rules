@@ -55,7 +55,7 @@ service cloud.firestore {
     // Investigation entity validation
     function isValidInvestigation(data) {
       return data.keys().hasAll(['id', 'userId', 'title', 'language', 'status', 'createdAt', 'updatedAt']) &&
-             data.keys().hasOnly(['id', 'userId', 'projectId', 'title', 'errorMessage', 'stackTrace', 'logSnippet', 'language', 'framework', 'environment', 'userActions', 'analysisResult', 'status', 'confidenceScore', 'createdAt', 'updatedAt']) &&
+             data.keys().hasOnly(['id', 'userId', 'projectId', 'title', 'errorMessage', 'stackTrace', 'logSnippet', 'sourceCode', 'sourceFilePath', 'language', 'framework', 'environment', 'userActions', 'analysisResult', 'status', 'confidenceScore', 'createdAt', 'updatedAt']) &&
              data.id is string && isValidId(data.id) &&
              data.userId is string && data.userId == request.auth.uid &&
              data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
@@ -65,6 +65,8 @@ service cloud.firestore {
              (!('errorMessage' in data) || (data.errorMessage is string && data.errorMessage.size() <= 20000)) &&
              (!('stackTrace' in data) || (data.stackTrace is string && data.stackTrace.size() <= 50000)) &&
              (!('logSnippet' in data) || (data.logSnippet is string && data.logSnippet.size() <= 50000)) &&
+             (!('sourceCode' in data) || (data.sourceCode is string && data.sourceCode.size() <= 50000)) &&
+             (!('sourceFilePath' in data) || (data.sourceFilePath is string && data.sourceFilePath.size() <= 200)) &&
              (!('framework' in data) || (data.framework is string && data.framework.size() <= 60)) &&
              (!('environment' in data) || (data.environment is string && data.environment.size() <= 60)) &&
              (!('userActions' in data) || (data.userActions is string && data.userActions.size() <= 2000)) &&
@@ -128,7 +130,7 @@ service cloud.firestore {
                        incoming().createdAt == existing().createdAt &&
                        incoming().updatedAt == request.time &&
                        isValidInvestigation(incoming()) &&
-                       incoming().diff(existing()).affectedKeys().hasOnly(['title', 'projectId', 'status', 'errorMessage', 'stackTrace', 'logSnippet', 'language', 'framework', 'environment', 'userActions', 'analysisResult', 'confidenceScore', 'updatedAt']);
+                       incoming().diff(existing()).affectedKeys().hasOnly(['title', 'projectId', 'status', 'errorMessage', 'stackTrace', 'logSnippet', 'sourceCode', 'sourceFilePath', 'language', 'framework', 'environment', 'userActions', 'analysisResult', 'confidenceScore', 'updatedAt']);
       allow delete: if isSignedIn() && existing().userId == request.auth.uid;
     }
   }

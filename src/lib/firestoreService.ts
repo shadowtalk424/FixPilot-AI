@@ -260,6 +260,8 @@ export async function listUserInvestigations(userId: string): Promise<Investigat
         errorMessage: data.errorMessage || '',
         stackTrace: data.stackTrace || '',
         logSnippet: data.logSnippet || '',
+        sourceCode: data.sourceCode || '',
+        sourceFilePath: data.sourceFilePath || '',
         language: data.language || 'Auto-detect',
         framework: data.framework || '',
         environment: data.environment || 'development',
@@ -291,6 +293,8 @@ export async function getInvestigation(id: string): Promise<InvestigationData | 
       errorMessage: data.errorMessage || '',
       stackTrace: data.stackTrace || '',
       logSnippet: data.logSnippet || '',
+      sourceCode: data.sourceCode || '',
+      sourceFilePath: data.sourceFilePath || '',
       language: data.language,
       framework: data.framework || '',
       environment: data.environment || 'development',
@@ -315,6 +319,8 @@ export async function saveInvestigation(
     errorMessage: string;
     stackTrace?: string;
     logSnippet?: string;
+    sourceCode?: string;
+    sourceFilePath?: string;
     language: string;
     framework?: string;
     environment: 'development' | 'staging' | 'production' | 'ci_cd' | 'local' | 'other';
@@ -335,6 +341,8 @@ export async function saveInvestigation(
       errorMessage: params.errorMessage.slice(0, 20000),
       stackTrace: (params.stackTrace || '').slice(0, 50000),
       logSnippet: (params.logSnippet || '').slice(0, 50000),
+      sourceCode: (params.sourceCode || '').slice(0, 50000),
+      sourceFilePath: (params.sourceFilePath || '').slice(0, 200),
       language: params.language.slice(0, 60),
       framework: (params.framework || '').slice(0, 60),
       environment: params.environment,
@@ -356,6 +364,8 @@ export async function saveInvestigation(
       errorMessage: params.errorMessage,
       stackTrace: params.stackTrace,
       logSnippet: params.logSnippet,
+      sourceCode: params.sourceCode,
+      sourceFilePath: params.sourceFilePath,
       language: params.language,
       framework: params.framework,
       environment: params.environment,

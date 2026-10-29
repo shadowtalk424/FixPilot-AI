@@ -79,9 +79,9 @@ apiRouter.post('/analyze', async (req: Request, res: Response) => {
     return;
   }
 
-  const { errorMessage, stackTrace, logSnippet, language, framework, environment, userActions } = req.body;
+  const { errorMessage, stackTrace, logSnippet, sourceCode, sourceFilePath, language, framework, environment, userActions } = req.body;
 
-  if (!errorMessage && !logSnippet && !stackTrace) {
+  if (!errorMessage && !logSnippet && !stackTrace && !sourceCode) {
     res.status(400).json({
       error: 'Please provide at least an error message, stack trace, or log snippet to investigate.',
     });
@@ -101,12 +101,18 @@ apiRouter.post('/analyze', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'Log snippet is too long (maximum 100,000 characters).' });
     return;
   }
+  if (sourceCode && sourceCode.length > 60000) {
+    res.status(400).json({ error: 'Source code is too long (maximum 60,000 characters).' });
+    return;
+  }
 
   try {
     const analysis = await runDebuggingAnalysis({
       errorMessage: errorMessage || 'Unspecified runtime exception in attached logs',
       stackTrace,
       logSnippet,
+      sourceCode,
+      sourceFilePath,
       language: language || 'Auto-detect',
       framework,
       environment,

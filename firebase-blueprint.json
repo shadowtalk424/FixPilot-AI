@@ -46,6 +46,8 @@
         "errorMessage": { "type": "string", "maxLength": 20000 },
         "stackTrace": { "type": "string", "maxLength": 50000 },
         "logSnippet": { "type": "string", "maxLength": 50000 },
+        "sourceCode": { "type": "string", "maxLength": 50000 },
+        "sourceFilePath": { "type": "string", "maxLength": 200 },
         "language": { "type": "string", "maxLength": 60 },
         "framework": { "type": "string", "maxLength": 60 },
         "environment": { "type": "string", "maxLength": 60 },

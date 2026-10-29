@@ -19,6 +19,9 @@ import {
   Info,
   Layers,
   Sparkles,
+  GitBranch,
+  ShieldCheck,
+  Flame,
 } from 'lucide-react';
 import { InvestigationData, StructuredAnalysisResult } from '../types/investigation.ts';
 import { CodeBlock } from '../components/CodeBlock.tsx';
@@ -112,7 +115,7 @@ export const InvestigationResultsPage: React.FC<InvestigationResultsPageProps> =
 
   // Copy quick diagnosis summary
   const handleCopySummary = async () => {
-    const textToCopy = `FixPilot AI Diagnosis: ${currentInv.title}\n\nSummary:\n${result.errorSummary}\n\nConfidence: ${result.confidenceScore}%\n\nConfirmed Facts:\n${result.confirmedFacts.map((f) => `• ${f}`).join('\n')}\n\nTop Root Cause:\n${result.hypotheses[0]?.title}: ${result.hypotheses[0]?.explanation}`;
+    const textToCopy = `FixPilot AI Evidence-Based Diagnosis: ${currentInv.title}\n\n1. Executive Summary:\n${result.errorSummary}\n\n2. Calibrated Confidence: ${result.confidenceScore}% (Evidence Completeness: ${result.evidenceCompletenessScore}%)\n\n3. Confirmed Evidence:\n${result.confirmedEvidence.map((f) => `• ${f}`).join('\n')}\n\n4. Top Root Cause Hypothesis:\n#1 ${result.hypotheses[0]?.title} [${result.hypotheses[0]?.probability}]: ${result.hypotheses[0]?.explanation}\n\n5. Verification Status: Unexecuted (Proposed Patch)`;
     try {
       await navigator.clipboard.writeText(textToCopy);
       setCopiedSummary(true);
@@ -236,8 +239,27 @@ export const InvestigationResultsPage: React.FC<InvestigationResultsPageProps> =
         </div>
       </div>
 
-      {/* Scrubbing & Execution Caution Banner */}
+      {/* Scrubbing & Verification Status Banner */}
       <div className="space-y-3">
+        {/* Verification Status Banner (Priority 2 & 5) */}
+        <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-950/20 text-xs text-amber-200/90 flex items-start gap-3">
+          <Info className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-amber-300 uppercase tracking-wider font-mono">
+                Verification Status: {result.verificationStatus?.isExecuted ? 'Executed' : 'Proposed / Unexecuted'}
+              </span>
+              <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-mono">
+                Zero-Execution Policy
+              </span>
+            </div>
+            <p className="text-slate-300 leading-relaxed">
+              {result.verificationStatus?.executionSummary ||
+                'FixPilot AI generates diagnostic patches using static analytical reasoning. No code has been executed in an active runtime or automated test runner. Always verify with your local test suite before merging.'}
+            </p>
+          </div>
+        </div>
+
         {result.secretsScrubbedCount && result.secretsScrubbedCount > 0 ? (
           <div className="p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-950/20 text-emerald-300 text-xs flex items-center gap-2 font-mono">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -247,27 +269,20 @@ export const InvestigationResultsPage: React.FC<InvestigationResultsPageProps> =
             </span>
           </div>
         ) : null}
-
-        <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-950/20 text-xs text-amber-200/90 flex items-start gap-3">
-          <Info className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
-          <div>
-            <span className="font-semibold text-amber-300">Engineering Disclaimer: </span>
-            <span>
-              {result.executionDisclaimer ||
-                'FixPilot AI generates patches based on static reasoning and stack trace patterns. No code has been executed on live servers. Always review and verify patches using your local test runner.'}
-            </span>
-          </div>
-        </div>
       </div>
 
-      {/* Section 1: Executive Error Summary & Diagnostic Confidence */}
+      {/* SECTION 1: Executive Summary & Calibrated Confidence */}
       <div className="p-6 rounded-xl border border-slate-800 bg-[#0d1322] space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-violet-400" />
-            <h2 className="text-base font-semibold text-white">Executive Diagnosis</h2>
+            <h2 className="text-base font-semibold text-white">1. Executive Summary</h2>
           </div>
-          <ConfidenceBadge score={result.confidenceScore} reasoning={result.confidenceReasoning} />
+          <ConfidenceBadge
+            score={result.confidenceScore}
+            evidenceCompletenessScore={result.evidenceCompletenessScore}
+            reasoning={result.confidenceReasoning}
+          />
         </div>
 
         <p className="text-sm text-slate-200 leading-relaxed font-sans">
@@ -289,66 +304,80 @@ export const InvestigationResultsPage: React.FC<InvestigationResultsPageProps> =
             </ul>
           </div>
         )}
+
+        <div className="pt-2 text-[11px] font-mono text-slate-500 border-t border-slate-800/80">
+          Methodology: {result.calibratedMethodology}
+        </div>
       </div>
 
-      {/* Section 2: Confirmed Facts vs. Hypotheses */}
+      {/* SECTION 2 & SECTION 3: Confirmed Evidence vs Inconsistencies */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Confirmed Facts */}
+        {/* SECTION 2: Confirmed Evidence */}
         <div className="p-6 rounded-xl border border-slate-800 bg-[#0d1322] space-y-4">
           <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold uppercase tracking-wider">
             <CheckCircle2 className="w-4 h-4" />
-            <span>Confirmed Facts (Extracted from Trace)</span>
+            <span>2. Confirmed Evidence (Witnessed Facts)</span>
           </div>
           <p className="text-xs text-slate-400">
-            These statements represent verifiable data explicitly present in the provided stack trace and logs.
+            Explicitly witnessed data present in traces, logs, or code. Plausible explanations are strictly barred from this section.
           </p>
           <div className="space-y-2">
-            {result.confirmedFacts.map((fact, idx) => (
-              <div
-                key={idx}
-                className="p-3 rounded-lg bg-[#070b12] border border-slate-800 text-xs text-slate-200 flex items-start gap-2.5 font-mono"
-              >
-                <span className="text-emerald-400 font-bold shrink-0">✓</span>
-                <span>{fact}</span>
-              </div>
-            ))}
+            {result.confirmedEvidence && result.confirmedEvidence.length > 0 ? (
+              result.confirmedEvidence.map((fact, idx) => (
+                <div
+                  key={idx}
+                  className="p-3 rounded-lg bg-[#070b12] border border-slate-800 text-xs text-slate-200 flex items-start gap-2.5 font-mono"
+                >
+                  <span className="text-emerald-400 font-bold shrink-0">✓</span>
+                  <span>{fact}</span>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-slate-500 italic">No direct stack trace facts verified.</p>
+            )}
           </div>
         </div>
 
-        {/* Missing Information Needed for 100% Certainty */}
-        <div className="p-6 rounded-xl border border-slate-800 bg-[#0d1322] space-y-4">
+        {/* SECTION 3: Evidence Inconsistencies */}
+        <div className="p-6 rounded-xl border border-violet-500/30 bg-[#0d1322] space-y-4">
           <div className="flex items-center gap-2 text-amber-400 text-xs font-semibold uppercase tracking-wider">
-            <HelpCircle className="w-4 h-4" />
-            <span>Missing Information Needed</span>
+            <AlertTriangle className="w-4 h-4 text-amber-400" />
+            <span>3. Evidence Inconsistencies & Contract Clashes</span>
           </div>
           <p className="text-xs text-slate-400">
-            FixPilot AI highlights what context or files are absent to prevent false certainty.
+            Detected discrepancies between error exceptions, logs, environment variables, or API responses.
           </p>
-          {result.missingInformation && result.missingInformation.length > 0 ? (
-            <div className="space-y-2">
-              {result.missingInformation.map((infoItem, idx) => (
+          <div className="space-y-2">
+            {result.evidenceInconsistencies && result.evidenceInconsistencies.length > 0 ? (
+              result.evidenceInconsistencies.map((inc, idx) => (
                 <div
                   key={idx}
-                  className="p-3 rounded-lg bg-[#070b12] border border-slate-800 text-xs text-slate-300 flex items-start gap-2.5"
+                  className="p-3.5 rounded-lg bg-[#070b12] border border-amber-500/40 text-xs text-amber-200/95 flex items-start gap-2.5 leading-relaxed"
                 >
-                  <span className="text-amber-400 font-bold shrink-0">?</span>
-                  <span>{infoItem}</span>
+                  <span className="text-amber-400 font-bold shrink-0">⚠️</span>
+                  <span>{inc}</span>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-slate-500 italic">
-              All essential parameters were discernible from the provided trace and logs.
-            </p>
-          )}
+              ))
+            ) : (
+              <div className="p-3 rounded-lg bg-[#070b12] border border-slate-800 text-xs text-slate-400 flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-400" />
+                <span>No contradictory claims detected across submitted logs and stack frames.</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Section 3: Ranked Root Cause Hypotheses */}
+      {/* SECTION 4: Ranked Root-Cause Hypotheses */}
       <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Layers className="w-5 h-5 text-violet-400" />
-          <h2 className="text-lg font-bold text-white">Ranked Probable Root Causes</h2>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Layers className="w-5 h-5 text-violet-400" />
+            <h2 className="text-lg font-bold text-white">4. Ranked Root-Cause Hypotheses</h2>
+          </div>
+          <span className="text-xs text-slate-500 font-mono">
+            Hypotheses are strictly probabilistic theories
+          </span>
         </div>
 
         <div className="space-y-4">
@@ -374,44 +403,118 @@ export const InvestigationResultsPage: React.FC<InvestigationResultsPageProps> =
                         : 'bg-slate-700/30 text-slate-400 border border-slate-700'
                     }`}
                   >
-                    {h.probability} Probability
+                    {h.probability} Plausibility
                   </span>
-                  <span className="text-[10px] font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
-                    {h.isConfirmedFact ? 'Confirmed Fact' : 'Investigative Hypothesis'}
+                  <span className="text-[10px] font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                    Probabilistic Hypothesis
                   </span>
                 </div>
               </div>
 
               <p className="text-xs text-slate-300 leading-relaxed">{h.explanation}</p>
 
-              {/* Supporting evidence */}
-              <div className="space-y-1.5 pt-1">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                  Supporting Trace Evidence:
-                </span>
-                <ul className="space-y-1 text-xs text-slate-400 font-mono">
-                  {h.supportingEvidence.map((ev, i) => (
-                    <li key={i} className="flex items-start gap-2">
-                      <span className="text-violet-400 font-bold">›</span>
-                      <span>{ev}</span>
-                    </li>
-                  ))}
-                </ul>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                {/* Supporting */}
+                <div className="space-y-1.5 p-3 rounded-lg bg-[#070b12] border border-slate-800/80">
+                  <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Supporting Evidence
+                  </span>
+                  <ul className="space-y-1 text-xs text-slate-300 font-mono">
+                    {h.supportingEvidence.map((ev, i) => (
+                      <li key={i} className="flex items-start gap-1.5">
+                        <span className="text-emerald-400 font-bold">•</span>
+                        <span>{ev}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Contradicting */}
+                <div className="space-y-1.5 p-3 rounded-lg bg-[#070b12] border border-slate-800/80">
+                  <span className="text-[11px] font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    Contradicting / Inconclusive Evidence
+                  </span>
+                  <ul className="space-y-1 text-xs text-slate-300 font-mono">
+                    {h.contradictingEvidence && h.contradictingEvidence.length > 0 ? (
+                      h.contradictingEvidence.map((ev, i) => (
+                        <li key={i} className="flex items-start gap-1.5">
+                          <span className="text-amber-400 font-bold">•</span>
+                          <span>{ev}</span>
+                        </li>
+                      ))
+                    ) : (
+                      <li className="text-slate-500 italic">No contradicting trace markers discovered.</li>
+                    )}
+                  </ul>
+                </div>
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Section 4: Proposed Code Patches */}
+      {/* SECTION 5: Missing Information & Requested Source Code */}
+      <div className="p-6 rounded-xl border border-slate-800 bg-[#0d1322] space-y-4">
+        <div className="flex items-center gap-2 text-amber-400 text-xs font-semibold uppercase tracking-wider">
+          <HelpCircle className="w-4 h-4" />
+          <span>5. Missing Information & Requested Source Code</span>
+        </div>
+        <p className="text-xs text-slate-400">
+          FixPilot AI identifies unverified assumptions and prompts for exact files to reach certainty.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <h4 className="text-xs font-semibold text-slate-300">Missing Diagnostic Context:</h4>
+            {result.missingInformation && result.missingInformation.length > 0 ? (
+              result.missingInformation.map((infoItem, idx) => (
+                <div
+                  key={idx}
+                  className="p-3 rounded-lg bg-[#070b12] border border-slate-800 text-xs text-slate-300 flex items-start gap-2.5"
+                >
+                  <span className="text-amber-400 font-bold shrink-0">?</span>
+                  <span>{infoItem}</span>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-slate-500 italic">No critical diagnostic parameters missing.</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <h4 className="text-xs font-semibold text-slate-300">Requested Source Code Files:</h4>
+            {result.requestedSourceCode && result.requestedSourceCode.length > 0 ? (
+              result.requestedSourceCode.map((reqCode, idx) => (
+                <div
+                  key={idx}
+                  className="p-3 rounded-lg bg-[#070b12] border border-violet-500/30 text-xs text-violet-300 font-mono flex items-start gap-2.5"
+                >
+                  <span className="text-violet-400 font-bold shrink-0">📄</span>
+                  <span>{reqCode}</span>
+                </div>
+              ))
+            ) : (
+              <div className="p-3 rounded-lg bg-[#070b12] border border-slate-800 text-xs text-emerald-400">
+                ✓ Relevant source code has already been supplied for this investigation.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* SECTION 6: Proposed Code Patches */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Code2 className="w-5 h-5 text-violet-400" />
-            <h2 className="text-lg font-bold text-white">Proposed Code Patches</h2>
+            <h2 className="text-lg font-bold text-white">6. Code Patches</h2>
           </div>
-          <span className="text-xs text-slate-500">
-            Static AI proposal • Review before merging
+          <span className="text-xs font-mono text-slate-400 bg-slate-800 px-2.5 py-1 rounded border border-slate-700">
+            {result.proposedPatches[0]?.patchNature === 'evidence_backed'
+              ? '✓ Evidence-Backed Patch'
+              : '⚠️ Conditional Structural Example (Source code was omitted)'}
           </span>
         </div>
 
@@ -421,21 +524,43 @@ export const InvestigationResultsPage: React.FC<InvestigationResultsPageProps> =
               key={idx}
               className="p-5 rounded-xl border border-slate-800 bg-[#0d1322] space-y-3"
             >
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
                 <div>
-                  <h3 className="text-sm font-semibold text-white">
-                    Patch #{idx + 1}: {patch.description}
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                        patch.patchNature === 'evidence_backed'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                          : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      }`}
+                    >
+                      {patch.patchNature === 'evidence_backed' ? 'Evidence-Backed Patch' : 'Conditional Example'}
+                    </span>
+                    <h3 className="text-sm font-semibold text-white">
+                      Patch #{idx + 1}: {patch.description}
+                    </h3>
+                  </div>
                   {patch.filePath && (
-                    <span className="text-xs font-mono text-violet-400 mt-0.5 block">
-                      Target: {patch.filePath}
+                    <span className="text-xs font-mono text-violet-400 mt-1 block">
+                      Target File: {patch.filePath}
                     </span>
                   )}
                 </div>
-                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
                   {patch.patchType}
                 </span>
               </div>
+
+              {/* API Contract vs Frontend Defensive Programming analysis (Priority 3) */}
+              {patch.contractProblemAnalysis && (
+                <div className="p-3 rounded-lg bg-violet-950/20 border border-violet-500/30 text-xs text-violet-200 flex items-start gap-2">
+                  <GitBranch className="w-4 h-4 text-violet-400 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="text-violet-300">Contract Analysis: </strong>
+                    <span>{patch.contractProblemAnalysis}</span>
+                  </div>
+                </div>
+              )}
 
               {patch.safetyWarning && (
                 <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-500/20 text-xs text-amber-300 flex items-center gap-2">
@@ -447,44 +572,58 @@ export const InvestigationResultsPage: React.FC<InvestigationResultsPageProps> =
               {/* Original snippet if present */}
               {patch.originalSnippet && (
                 <div>
-                  <span className="text-[11px] font-mono text-slate-400">Original / Buggy Code:</span>
+                  <span className="text-[11px] font-mono text-slate-400">Target Expression / Context:</span>
                   <CodeBlock
                     code={patch.originalSnippet}
                     language={patch.language}
-                    filename="Original Snippet"
+                    filename={patch.filePath || 'Original Code'}
                   />
                 </div>
               )}
 
               {/* Proposed Code */}
               <div>
-                <span className="text-[11px] font-mono text-emerald-400">Proposed Replacement Patch:</span>
+                <span className="text-[11px] font-mono text-emerald-400 font-semibold">
+                  {patch.patchNature === 'evidence_backed' ? 'Minimum Necessary Patch:' : 'Suggested Structural Pattern:'}
+                </span>
                 <CodeBlock
                   code={patch.proposedCode}
                   language={patch.language}
-                  filename={patch.filePath || 'Proposed Fix'}
+                  filename={patch.filePath || 'Proposed Patch'}
                 />
               </div>
 
-              <p className="text-xs text-slate-300 leading-relaxed bg-[#070b12] p-3 rounded-lg border border-slate-800/80">
-                <strong className="text-violet-300">Rationale: </strong>
-                {patch.explanation}
-              </p>
+              <div className="p-3 rounded-lg bg-[#070b12] border border-slate-800 text-xs text-slate-300 space-y-2">
+                <p>
+                  <strong className="text-violet-300">Explanation: </strong>
+                  {patch.explanation}
+                </p>
+                {patch.assumptions && patch.assumptions.length > 0 && (
+                  <div>
+                    <strong className="text-slate-400 text-[11px] uppercase tracking-wider">Explicit Assumptions:</strong>
+                    <ul className="list-disc pl-4 space-y-0.5 text-[11px] text-slate-400 font-mono mt-1">
+                      {patch.assumptions.map((asm, i) => (
+                        <li key={i}>{asm}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Section 5: Reproduction Instructions & Regression Tests */}
+      {/* SECTION 7 & SECTION 8: Reproduction Instructions & Regression Tests */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Step-by-Step Reproduction Instructions */}
+        {/* SECTION 7: Step-by-Step Reproduction Instructions */}
         <div className="p-6 rounded-xl border border-slate-800 bg-[#0d1322] space-y-4">
           <div className="flex items-center gap-2 text-violet-400 text-xs font-semibold uppercase tracking-wider">
             <RotateCcw className="w-4 h-4" />
-            <span>Reproduction Instructions</span>
+            <span>7. Reproduction Instructions</span>
           </div>
           <p className="text-xs text-slate-400">
-            Follow these steps to reliably reproduce the error in your local dev environment:
+            Step-by-step procedure to reliably trigger and observe this issue in local development:
           </p>
           <ol className="space-y-2.5 text-xs text-slate-200">
             {result.reproductionSteps.map((step, idx) => (
@@ -498,25 +637,33 @@ export const InvestigationResultsPage: React.FC<InvestigationResultsPageProps> =
           </ol>
         </div>
 
-        {/* Suggested Regression Tests */}
+        {/* SECTION 8: Suggested Regression Tests */}
         <div className="p-6 rounded-xl border border-slate-800 bg-[#0d1322] space-y-4">
-          <div className="flex items-center gap-2 text-violet-400 text-xs font-semibold uppercase tracking-wider">
-            <Terminal className="w-4 h-4" />
-            <span>Suggested Regression Tests</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-violet-400 text-xs font-semibold uppercase tracking-wider">
+              <Terminal className="w-4 h-4" />
+              <span>8. Regression Tests (Proposed / Unexecuted)</span>
+            </div>
+            <span className="text-[10px] font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+              Unexecuted
+            </span>
           </div>
           <p className="text-xs text-slate-400">
-            Add these test assertions to your test suite to prevent recurrence:
+            Proposed unit assertions covering normal behavior, empty data, null/undefined inputs, and malformed responses:
           </p>
           <div className="space-y-4">
             {result.regressionTests.map((t, idx) => (
-              <div key={idx} className="space-y-2">
+              <div key={idx} className="space-y-2 p-3 rounded-lg bg-[#070b12] border border-slate-800">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-white">{t.testTitle}</span>
                   <span className="font-mono text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
                     {t.testFramework}
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-400">{t.description}</p>
+                <p className="text-[11px] text-slate-400 font-sans">
+                  <strong className="text-violet-300">Validates: </strong>
+                  {t.validationPurpose || t.description}
+                </p>
                 <CodeBlock code={t.testCode} language={currentInv.language} filename={`${t.testFramework} Test`} />
               </div>
             ))}
@@ -524,11 +671,11 @@ export const InvestigationResultsPage: React.FC<InvestigationResultsPageProps> =
         </div>
       </div>
 
-      {/* Section 6: Recommended Next Debugging Actions */}
+      {/* SECTION 9: Recommended Next Debugging Actions */}
       <div className="p-6 rounded-xl border border-slate-800 bg-[#0d1322] space-y-4">
         <h2 className="text-base font-semibold text-white flex items-center gap-2">
           <Terminal className="w-4 h-4 text-violet-400" />
-          Recommended Next Debugging Actions
+          9. Recommended Next Debugging Actions
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {result.nextActions.map((action) => (
@@ -553,12 +700,19 @@ export const InvestigationResultsPage: React.FC<InvestigationResultsPageProps> =
         </div>
       </div>
 
-      {/* Bottom Export & Return bar */}
+      {/* SECTION 10: Verification Status & Export */}
       <div className="p-6 rounded-xl border border-slate-800 bg-[#090d16] flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="space-y-1">
-          <h4 className="text-sm font-semibold text-white">Share or Archive Investigation</h4>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-300 font-mono">
+              10. Verification Status:
+            </span>
+            <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-xs font-mono font-medium">
+              {result.verificationStatus?.isExecuted ? 'Verified by Test Runner' : 'Proposed Only (Unexecuted)'}
+            </span>
+          </div>
           <p className="text-xs text-slate-400">
-            Export a clean Markdown report formatted for GitHub issues or team Slack channels.
+            Export complete 10-point report formatted for GitHub issues, PR descriptions, or team review.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -566,14 +720,14 @@ export const InvestigationResultsPage: React.FC<InvestigationResultsPageProps> =
             onClick={() => onNavigate('new')}
             className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition-colors"
           >
-            Start Another Investigation
+            New Investigation
           </button>
           <button
             onClick={() => setShowExportModal(true)}
             className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold shadow-md shadow-violet-600/25 flex items-center gap-1.5 transition-all"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Export Markdown</span>
+            <span>Export Report (.md)</span>
           </button>
         </div>
       </div>

@@ -37,6 +37,8 @@ export const NewInvestigationPage: React.FC<NewInvestigationPageProps> = ({
   const [errorMessage, setErrorMessage] = useState('');
   const [stackTrace, setStackTrace] = useState('');
   const [logSnippet, setLogSnippet] = useState('');
+  const [sourceCode, setSourceCode] = useState('');
+  const [sourceFilePath, setSourceFilePath] = useState('');
   const [language, setLanguage] = useState('TypeScript');
   const [framework, setFramework] = useState('React');
   const [environment, setEnvironment] = useState<'development' | 'staging' | 'production' | 'ci_cd' | 'local' | 'other'>('development');
@@ -65,7 +67,37 @@ export const NewInvestigationPage: React.FC<NewInvestigationPageProps> = ({
 
   // Handle sample pre-fills
   const loadSample = (key: string) => {
-    if (key === 'hydration') {
+    if (key === 'inconsistency') {
+      setTitle('Evidence Inconsistency: TypeError "undefined" vs API Log "null"');
+      setErrorMessage("TypeError: Cannot read properties of undefined (reading 'avatarUrl')");
+      setStackTrace(
+        `TypeError: Cannot read properties of undefined (reading 'avatarUrl')
+    at UserAvatar (/src/components/UserAvatar.tsx:14:24)
+    at renderWithHooks (react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (react-dom.development.js:20103:13)`
+      );
+      setLogSnippet(
+        `[2026-10-29T10:14:02.120Z] [HTTP 200 OK] GET /api/v1/profile -> Response: {"user": null, "authenticated": true, "sessionAge": 412}
+[2026-10-29T10:14:02.135Z] INFO: Client rendered layout, dispatched UserAvatar render`
+      );
+      setSourceFilePath('/src/components/UserAvatar.tsx');
+      setSourceCode(
+        `interface ProfilePayload {
+  user?: {
+    avatarUrl: string;
+  };
+}
+
+export function UserAvatar({ profile }: { profile: ProfilePayload }) {
+  // Direct access: assumes profile.user is always an object with avatarUrl
+  return <img src={profile.user.avatarUrl} alt="User Avatar" className="w-10 h-10 rounded-full" />;
+}`
+      );
+      setLanguage('TypeScript');
+      setFramework('React / Next.js');
+      setEnvironment('development');
+      setUserActions('Navigated to dashboard immediately after OAuth login. Backend returned 200 OK with null user object before onboarding completion.');
+    } else if (key === 'hydration') {
       setTitle('Next.js 15 Client Hydration Mismatch on Dynamic Date');
       setErrorMessage(
         'Error: Hydration failed because the initial UI does not match what was rendered on the server.'
@@ -82,6 +114,10 @@ export const NewInvestigationPage: React.FC<NewInvestigationPageProps> = ({
         `[Warning] Text content did not match. Server: "Last Login: 10/29/2026, 4:15:00 AM" Client: "Last Login: 10/29/2026, 4:15:02 AM"
   See more info here: https://nextjs.org/docs/messages/react-hydration-error`
       );
+      setSourceFilePath('/src/app/page.tsx');
+      setSourceCode(`export default function Page() {
+  return <div>Last Login: {new Date().toLocaleString()}</div>;
+}`);
       setLanguage('TypeScript');
       setFramework('Next.js / React 19');
       setEnvironment('development');
@@ -101,6 +137,10 @@ export const NewInvestigationPage: React.FC<NewInvestigationPageProps> = ({
         `[2026-10-29T11:15:20.104Z] INFO: Initializing MongoClient connection to mongodb+srv://staging_user:Pass#123@cluster0.abc.mongodb.net/app_db
 [2026-10-29T11:15:20.890Z] ERROR: MongoClient failed handshake: MongoServerError: Authentication failed.`
       );
+      setSourceFilePath('/src/db/connection.js');
+      setSourceCode(`const uri = \`mongodb+srv://\${user}:\${pass}@cluster0.abc.mongodb.net/\${db}\`;
+const client = new MongoClient(uri);
+await client.connect();`);
       setLanguage('JavaScript');
       setFramework('Express / Node.js');
       setEnvironment('staging');
@@ -123,6 +163,11 @@ pydantic_core._pydantic_core.ValidationError: 1 validation error for UserPayload
         `DEBUG: Incoming request POST /api/v1/users payload: {"id": "", "email": "test@example.com", "role": "member"}
 INFO: 422 Unprocessable Entity returned to client.`
       );
+      setSourceFilePath('/app/routers/users.py');
+      setSourceCode(`class UserPayload(BaseModel):
+    id: UUID
+    email: EmailStr
+    role: str = "member"`);
       setLanguage('Python');
       setFramework('FastAPI / Pydantic v2');
       setEnvironment('development');
@@ -138,13 +183,13 @@ INFO: 422 Unprocessable Entity returned to client.`
 
   // Client-side quick redaction preview
   useEffect(() => {
-    const combined = `${errorMessage}\n${stackTrace}\n${logSnippet}\n${userActions}`;
+    const combined = `${errorMessage}\n${stackTrace}\n${logSnippet}\n${sourceCode}\n${userActions}`;
     const scrub = redactSensitiveData(combined);
     setRedactionStats({
       count: scrub.redactionsCount,
       types: scrub.detectedTypes,
     });
-  }, [errorMessage, stackTrace, logSnippet, userActions]);
+  }, [errorMessage, stackTrace, logSnippet, sourceCode, userActions]);
 
   // Handle Log File Upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -207,6 +252,8 @@ INFO: 422 Unprocessable Entity returned to client.`
           errorMessage: errorMessage.trim(),
           stackTrace: stackTrace.trim(),
           logSnippet: logSnippet.trim(),
+          sourceCode: sourceCode.trim(),
+          sourceFilePath: sourceFilePath.trim(),
           language,
           framework,
           environment,
@@ -238,6 +285,8 @@ INFO: 422 Unprocessable Entity returned to client.`
           errorMessage,
           stackTrace,
           logSnippet,
+          sourceCode,
+          sourceFilePath,
           language,
           framework,
           environment,
@@ -307,6 +356,14 @@ INFO: 422 Unprocessable Entity returned to client.`
           <span className="font-medium">Need test data? Load a real-world error scenario:</span>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => loadSample('inconsistency')}
+            className="px-2.5 py-1 rounded bg-violet-600/30 hover:bg-violet-600/40 text-violet-200 border border-violet-500/40 transition-colors font-medium flex items-center gap-1.5 shadow-sm"
+          >
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+            <span>TypeError 'undefined' vs Log 'null'</span>
+          </button>
           <button
             type="button"
             onClick={() => loadSample('hydration')}
@@ -447,6 +504,42 @@ INFO: 422 Unprocessable Entity returned to client.`
               {fileError}
             </p>
           )}
+        </div>
+
+        {/* Relevant Source Code (Optional, Enables Evidence-Backed Patches) */}
+        <div className="space-y-2 p-4 rounded-xl border border-slate-800 bg-[#0d1322]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-violet-400" />
+              <label className="block text-xs font-semibold text-slate-300">
+                Relevant Source Code (Optional)
+              </label>
+            </div>
+            <span className="text-[11px] font-mono">
+              {sourceCode.trim() ? (
+                <span className="text-emerald-400 font-semibold">✓ Evidence-Backed Patch Mode</span>
+              ) : (
+                <span className="text-slate-500">Omit to generate conditional structural example</span>
+              )}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2.5">
+            <input
+              type="text"
+              value={sourceFilePath}
+              onChange={(e) => setSourceFilePath(e.target.value)}
+              placeholder="Source File Path, e.g. /src/components/UserAvatar.tsx"
+              className="w-full px-3 py-2 rounded-lg bg-[#070b12] border border-slate-800 text-white font-mono text-xs placeholder-slate-600 focus:outline-none focus:border-violet-500"
+            />
+            <textarea
+              rows={4}
+              value={sourceCode}
+              onChange={(e) => setSourceCode(e.target.value)}
+              placeholder="Paste relevant module or component code here..."
+              className="w-full px-3.5 py-2 rounded-lg bg-[#070b12] border border-slate-800 text-white font-mono text-xs placeholder-slate-600 focus:outline-none focus:border-violet-500"
+            />
+          </div>
         </div>
 
         {/* Technical Context Grid: Language, Framework, Environment, Project */}

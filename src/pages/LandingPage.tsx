@@ -14,6 +14,7 @@ import {
   Layers,
   ChevronDown,
   ChevronUp,
+  AlertTriangle,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 
@@ -199,6 +200,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, onSelectSa
             Test 1-Click Real World Debugging Scenarios
           </h3>
           <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={() => {
+                onSelectSample('inconsistency');
+                onNavigate('new');
+              }}
+              className="px-3.5 py-2 rounded-lg bg-violet-600/30 hover:bg-violet-600/40 border border-violet-500/40 text-xs font-semibold text-violet-200 transition-colors flex items-center gap-2 shadow-sm"
+            >
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+              <span>Inconsistency: TypeError vs API Log</span>
+            </button>
             <button
               onClick={() => {
                 onSelectSample('hydration');
