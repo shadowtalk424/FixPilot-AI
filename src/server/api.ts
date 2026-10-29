@@ -1,33 +1,24 @@
 import express, { Request, Response } from 'express';
 import { runDebuggingAnalysis } from './gemini.ts';
 import { redactSensitiveData } from './redactor.ts';
+import { globalRateLimiter } from './rateLimiter.ts';
 
 export const apiRouter = express.Router();
 
 // Middleware: parse JSON with strict size limit (max 1MB to prevent DoS)
 apiRouter.use(express.json({ limit: '1mb' }));
 
-// Simple in-memory rate limiter per IP / User identifier to prevent abuse
-const requestTracker = new Map<string, { count: number; resetTime: number }>();
+// Handle malformed JSON syntax gracefully with 400 Bad Request
+apiRouter.use((err: any, _req: Request, res: Response, next: any) => {
+  if (err instanceof SyntaxError && 'status' in err && (err as any).status === 400) {
+    res.status(400).json({ error: 'Malformed JSON syntax in request body' });
+    return;
+  }
+  next(err);
+});
+
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const MAX_REQUESTS_PER_MINUTE = 20;
-
-function checkRateLimit(identifier: string): boolean {
-  const now = Date.now();
-  const userRecord = requestTracker.get(identifier);
-
-  if (!userRecord || now > userRecord.resetTime) {
-    requestTracker.set(identifier, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
-    return true;
-  }
-
-  if (userRecord.count >= MAX_REQUESTS_PER_MINUTE) {
-    return false;
-  }
-
-  userRecord.count++;
-  return true;
-}
 
 // Health check
 apiRouter.get('/health', (_req: Request, res: Response) => {
@@ -71,10 +62,27 @@ apiRouter.post('/sanitize', (req: Request, res: Response) => {
 
 // Main AI Debugging analysis endpoint
 apiRouter.post('/analyze', async (req: Request, res: Response) => {
-  const clientIp = req.ip || req.headers['x-forwarded-for'] || 'anonymous';
-  if (!checkRateLimit(String(clientIp))) {
+  const forwarded = req.headers['x-forwarded-for'];
+  const clientIp = (typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : Array.isArray(forwarded) ? forwarded[0] : null) || req.ip || 'anonymous';
+  const rateLimitStatus = await globalRateLimiter.checkLimit(
+    String(clientIp),
+    MAX_REQUESTS_PER_MINUTE,
+    RATE_LIMIT_WINDOW_MS
+  );
+
+  // Set standard rate limit headers
+  res.setHeader('X-RateLimit-Limit', MAX_REQUESTS_PER_MINUTE);
+  res.setHeader('X-RateLimit-Remaining', rateLimitStatus.remaining);
+  res.setHeader('X-RateLimit-Reset', Math.ceil(rateLimitStatus.resetTimeMs / 1000));
+  res.setHeader('X-RateLimit-Store', rateLimitStatus.storeType);
+
+  if (!rateLimitStatus.allowed) {
+    const retryAfterSec = Math.max(1, Math.ceil((rateLimitStatus.resetTimeMs - Date.now()) / 1000));
+    res.setHeader('Retry-After', retryAfterSec);
     res.status(429).json({
       error: 'Rate limit exceeded. Please wait a minute before requesting another analysis.',
+      retryAfterSeconds: retryAfterSec,
+      store: rateLimitStatus.storeType,
     });
     return;
   }

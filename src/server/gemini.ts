@@ -94,6 +94,39 @@ export function calculateEvidenceCompleteness(payload: AnalyzeRequestPayload): {
 }
 
 /**
+ * Word-boundary and structure-aware inconsistency detector between exceptions and runtime logs.
+ * Avoids false positives from compound words like "nullable", "null_terminator", or "nullpointer".
+ */
+export function detectEvidenceInconsistencies(
+  errorMessage: string,
+  stackTrace = '',
+  logSnippet = ''
+): string[] {
+  const inconsistencies: string[] = [];
+  const errorCombined = `${errorMessage || ''} ${stackTrace || ''}`;
+
+  // Word-boundary check for "undefined" in exception
+  const hasUndefinedException = /\bundefined\b/i.test(errorCombined);
+
+  // Check for genuine null values in logs (JSON properties, assignment, return values)
+  const hasJsonNull = /"[a-zA-Z0-9_-]+"\s*:\s*null\b/i.test(logSnippet || '');
+  const hasAssignmentNull = /(?:[:=]\s*null\b)/i.test(logSnippet || '');
+  const hasReturnedNull = /\b(?:returned|returns|got|resolves? to)\s+null\b/i.test(logSnippet || '');
+  const hasAffirmativeIsNull = /\b(?:is|was)\s+null\b/i.test(logSnippet || '') && !/\b(?:is|was)\s+not\s+null\b/i.test(logSnippet || '');
+  const hasArrayNull = /[\[{,]\s*null\s*[,\]}]/i.test(logSnippet || '');
+
+  const hasGenuineNullValue = hasJsonNull || hasAssignmentNull || hasReturnedNull || hasAffirmativeIsNull || hasArrayNull;
+
+  if (hasUndefinedException && hasGenuineNullValue) {
+    inconsistencies.push(
+      'Inconsistency detected: The exception references an "undefined" value, whereas runtime logs show data as "null". While null and undefined both represent empty states, JavaScript/TypeScript treats them as distinct primitives. The data transformation or property access pathway between the API log and the exception has not yet been verified.'
+    );
+  }
+
+  return inconsistencies;
+}
+
+/**
  * Strict schema validator ensuring all 10 required report sections exist and are well-formed.
  */
 export function validateAndNormalizeReport(
@@ -122,19 +155,17 @@ export function validateAndNormalizeReport(
       ];
 
   // 3. Evidence Inconsistencies
-  // Check for common contradictions, e.g. undefined in exception vs null in logs
+  // Check for common contradictions with word-boundary awareness
   const evidenceInconsistencies: string[] = [];
   if (Array.isArray(raw?.evidenceInconsistencies) && raw.evidenceInconsistencies.length > 0) {
     evidenceInconsistencies.push(...raw.evidenceInconsistencies.map(String));
   } else {
-    // Deterministic check
-    const lowerError = (payload.errorMessage + ' ' + (payload.stackTrace || '')).toLowerCase();
-    const lowerLogs = (payload.logSnippet || '').toLowerCase();
-    if (lowerError.includes('undefined') && lowerLogs.includes('null')) {
-      evidenceInconsistencies.push(
-        'Inconsistency detected: The exception references an "undefined" value, whereas runtime logs show data as "null". While null and undefined both represent empty states, JavaScript/TypeScript treats them as distinct primitives. The data transformation or property access pathway between the API log and the exception has not yet been verified.'
-      );
-    }
+    const detected = detectEvidenceInconsistencies(
+      payload.errorMessage,
+      payload.stackTrace,
+      payload.logSnippet
+    );
+    evidenceInconsistencies.push(...detected);
   }
 
   // 4. Ranked Hypotheses with supporting and contradicting evidence

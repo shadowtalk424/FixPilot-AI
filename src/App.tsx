@@ -3,19 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext.tsx';
 import { Navbar } from './components/Navbar.tsx';
 import { Footer } from './components/Footer.tsx';
 import { LandingPage } from './pages/LandingPage.tsx';
-import { DashboardPage } from './pages/DashboardPage.tsx';
-import { NewInvestigationPage } from './pages/NewInvestigationPage.tsx';
-import { InvestigationResultsPage } from './pages/InvestigationResultsPage.tsx';
-import { InvestigationHistoryPage } from './pages/InvestigationHistoryPage.tsx';
-import { ProjectSettingsPage } from './pages/ProjectSettingsPage.tsx';
-import { AccountSettingsPage } from './pages/AccountSettingsPage.tsx';
-import { PrivacyTermsPages } from './pages/PrivacyTermsPages.tsx';
 import { InvestigationData } from './types/investigation.ts';
+
+// Route-level lazy loading for non-landing pages
+const DashboardPage = lazy(() => import('./pages/DashboardPage.tsx').then((m) => ({ default: m.DashboardPage })));
+const NewInvestigationPage = lazy(() => import('./pages/NewInvestigationPage.tsx').then((m) => ({ default: m.NewInvestigationPage })));
+const InvestigationResultsPage = lazy(() => import('./pages/InvestigationResultsPage.tsx').then((m) => ({ default: m.InvestigationResultsPage })));
+const InvestigationHistoryPage = lazy(() => import('./pages/InvestigationHistoryPage.tsx').then((m) => ({ default: m.InvestigationHistoryPage })));
+const ProjectSettingsPage = lazy(() => import('./pages/ProjectSettingsPage.tsx').then((m) => ({ default: m.ProjectSettingsPage })));
+const AccountSettingsPage = lazy(() => import('./pages/AccountSettingsPage.tsx').then((m) => ({ default: m.AccountSettingsPage })));
+const PrivacyTermsPages = lazy(() => import('./pages/PrivacyTermsPages.tsx').then((m) => ({ default: m.PrivacyTermsPages })));
 
 function MainApp() {
   const { user, loading } = useAuth();
@@ -127,7 +129,20 @@ function MainApp() {
   return (
     <div className="min-h-screen flex flex-col bg-[#0b0f19] text-[#e2e8f0] selection:bg-violet-500/30 selection:text-violet-200">
       <Navbar currentPage={currentPage} onNavigate={handleNavigate} />
-      <main className="flex-1 pb-16">{renderCurrentPage()}</main>
+      <main className="flex-1 pb-16">
+        <Suspense
+          fallback={
+            <div className="flex-1 flex items-center justify-center min-h-[50vh]">
+              <div className="text-center space-y-3">
+                <div className="w-7 h-7 border-2 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="text-xs text-slate-500 font-mono">Loading module...</p>
+              </div>
+            </div>
+          }
+        >
+          {renderCurrentPage()}
+        </Suspense>
+      </main>
       <Footer onNavigate={handleNavigate} />
     </div>
   );
