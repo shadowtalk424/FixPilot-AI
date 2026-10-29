@@ -1,0 +1,76 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile with settings, usage statistics, and subscription tier.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "displayName": { "type": "string", "maxLength": 128 },
+        "photoURL": { "type": "string", "maxLength": 512 },
+        "tier": { "type": "string", "enum": ["free", "pro", "team"] },
+        "dailyAnalysisLimit": { "type": "number" },
+        "analysesUsedToday": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "email", "tier", "createdAt", "updatedAt"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "A software project or repository grouping related investigations.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 500 },
+        "defaultLanguage": { "type": "string", "maxLength": 60 },
+        "defaultFramework": { "type": "string", "maxLength": 60 },
+        "defaultEnvironment": { "type": "string", "maxLength": 60 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "name", "createdAt", "updatedAt"]
+    },
+    "Investigation": {
+      "title": "Investigation",
+      "description": "A structured debugging investigation session and report.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "projectId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "errorMessage": { "type": "string", "maxLength": 20000 },
+        "stackTrace": { "type": "string", "maxLength": 50000 },
+        "logSnippet": { "type": "string", "maxLength": 50000 },
+        "language": { "type": "string", "maxLength": 60 },
+        "framework": { "type": "string", "maxLength": 60 },
+        "environment": { "type": "string", "maxLength": 60 },
+        "userActions": { "type": "string", "maxLength": 2000 },
+        "analysisResult": { "type": "object" },
+        "status": { "type": "string", "enum": ["active", "resolved", "archived"] },
+        "confidenceScore": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "title", "language", "status", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile and account settings isolated per user."
+    },
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "User software projects for grouping investigations."
+    },
+    "/investigations/{investigationId}": {
+      "schema": "Investigation",
+      "description": "Debugging investigations and structured analysis reports."
+    }
+  }
+}

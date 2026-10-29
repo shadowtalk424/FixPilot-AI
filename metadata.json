@@ -1,0 +1,6 @@
+{
+  "name": "FixPilot AI",
+  "description": "Free-first AI debugging assistant for developers and software teams. Understand errors, investigate root causes, generate proposed patches, and export reproducible bug reports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

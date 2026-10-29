@@ -1,0 +1,135 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // User entity validation
+    function isValidUser(data) {
+      return data.keys().hasAll(['userId', 'email', 'tier', 'createdAt', 'updatedAt']) &&
+             data.keys().hasOnly(['userId', 'email', 'displayName', 'photoURL', 'tier', 'dailyAnalysisLimit', 'analysesUsedToday', 'createdAt', 'updatedAt']) &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.email is string && data.email.size() <= 256 &&
+             data.tier in ['free', 'pro', 'team'] &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 128)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 512)) &&
+             (!('dailyAnalysisLimit' in data) || data.dailyAnalysisLimit is number) &&
+             (!('analysesUsedToday' in data) || data.analysesUsedToday is number);
+    }
+
+    // Project entity validation
+    function isValidProject(data) {
+      return data.keys().hasAll(['id', 'userId', 'name', 'createdAt', 'updatedAt']) &&
+             data.keys().hasOnly(['id', 'userId', 'name', 'description', 'defaultLanguage', 'defaultFramework', 'defaultEnvironment', 'createdAt', 'updatedAt']) &&
+             data.id is string && isValidId(data.id) &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 120 &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 500)) &&
+             (!('defaultLanguage' in data) || (data.defaultLanguage is string && data.defaultLanguage.size() <= 60)) &&
+             (!('defaultFramework' in data) || (data.defaultFramework is string && data.defaultFramework.size() <= 60)) &&
+             (!('defaultEnvironment' in data) || (data.defaultEnvironment is string && data.defaultEnvironment.size() <= 60));
+    }
+
+    // Investigation entity validation
+    function isValidInvestigation(data) {
+      return data.keys().hasAll(['id', 'userId', 'title', 'language', 'status', 'createdAt', 'updatedAt']) &&
+             data.keys().hasOnly(['id', 'userId', 'projectId', 'title', 'errorMessage', 'stackTrace', 'logSnippet', 'language', 'framework', 'environment', 'userActions', 'analysisResult', 'status', 'confidenceScore', 'createdAt', 'updatedAt']) &&
+             data.id is string && isValidId(data.id) &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+             data.language is string && data.language.size() <= 60 &&
+             data.status in ['active', 'resolved', 'archived'] &&
+             (!('projectId' in data) || (data.projectId is string && (data.projectId == '' || isValidId(data.projectId)))) &&
+             (!('errorMessage' in data) || (data.errorMessage is string && data.errorMessage.size() <= 20000)) &&
+             (!('stackTrace' in data) || (data.stackTrace is string && data.stackTrace.size() <= 50000)) &&
+             (!('logSnippet' in data) || (data.logSnippet is string && data.logSnippet.size() <= 50000)) &&
+             (!('framework' in data) || (data.framework is string && data.framework.size() <= 60)) &&
+             (!('environment' in data) || (data.environment is string && data.environment.size() <= 60)) &&
+             (!('userActions' in data) || (data.userActions is string && data.userActions.size() <= 2000)) &&
+             (!('analysisResult' in data) || data.analysisResult is map) &&
+             (!('confidenceScore' in data) || data.confidenceScore is number);
+    }
+
+    // Users Collection (Strict PII isolation per UID)
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false; // Blanket enumeration of users is strictly blocked
+      allow create: if isOwner(userId) &&
+                       isValidUser(incoming()) &&
+                       incoming().userId == userId &&
+                       incoming().createdAt == request.time &&
+                       incoming().updatedAt == request.time;
+      allow update: if isOwner(userId) &&
+                       isValidUser(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt == request.time &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'tier', 'dailyAnalysisLimit', 'analysesUsedToday', 'updatedAt']);
+      allow delete: if isOwner(userId);
+    }
+
+    // Projects Collection
+    match /projects/{projectId} {
+      allow get: if isSignedIn() && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() &&
+                       isValidId(projectId) &&
+                       incoming().id == projectId &&
+                       incoming().userId == request.auth.uid &&
+                       isValidProject(incoming()) &&
+                       incoming().createdAt == request.time &&
+                       incoming().updatedAt == request.time;
+      allow update: if isSignedIn() &&
+                       existing().userId == request.auth.uid &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt == request.time &&
+                       isValidProject(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'defaultLanguage', 'defaultFramework', 'defaultEnvironment', 'updatedAt']);
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+
+    // Investigations Collection
+    match /investigations/{investigationId} {
+      allow get: if isSignedIn() && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() &&
+                       isValidId(investigationId) &&
+                       incoming().id == investigationId &&
+                       incoming().userId == request.auth.uid &&
+                       isValidInvestigation(incoming()) &&
+                       incoming().createdAt == request.time &&
+                       incoming().updatedAt == request.time;
+      allow update: if isSignedIn() &&
+                       existing().userId == request.auth.uid &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt == request.time &&
+                       isValidInvestigation(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['title', 'projectId', 'status', 'errorMessage', 'stackTrace', 'logSnippet', 'language', 'framework', 'environment', 'userActions', 'analysisResult', 'confidenceScore', 'updatedAt']);
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+  }
+}
